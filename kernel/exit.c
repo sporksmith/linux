@@ -1462,8 +1462,6 @@ repeat:
 		goto notask;
 
 	set_current_state(TASK_INTERRUPTIBLE);
-	// XXX: Do we need this? Or is the tasklist_lock sufficient?
-	//rcu_read_lock();
 	read_lock(&tasklist_lock);
 	tsk = current;
 
@@ -1475,10 +1473,13 @@ repeat:
 		struct task_struct *target = NULL;
 		bool do_regular_wait, do_ptrace_wait;
 
+		// XXX: Do we need this? Or is the tasklist_lock sufficient?
+		rcu_read_lock();
+
 		//printk(KERN_INFO "Entering waitpid optimization");
 		target = pid_task(wo->wo_pid, PIDTYPE_PID);
 		if (!target) {
-			//rcu_read_unlock();
+			rcu_read_unlock();
 			goto notask;
 		}
 		real_parent = !target->real_parent ? target->parent :
@@ -1486,8 +1487,7 @@ repeat:
 		if (!real_parent) {
 			// XXX: Is it a kernel bug to get here? Or would this be
 			// true of the init process?
-			//rcu_read_unlock();
-			read_unlock(&tasklist_lock);
+			rcu_read_unlock();
 			goto notask;
 		}
 		do_regular_wait = tsk == real_parent ||
@@ -1497,7 +1497,7 @@ repeat:
 				 (tsk == target->parent ||
 				  (!(wo->wo_flags & __WNOTHREAD) &&
 				   same_thread_group(tsk, target->parent)));
-		//rcu_read_unlock();
+		rcu_read_unlock();
 
 		//printk(KERN_INFO "do_regular_wait:%d do_ptrace_wait:%d", do_regular_wait, do_ptrace_wait);
 		if (do_regular_wait) {
