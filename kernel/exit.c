@@ -1462,8 +1462,65 @@ repeat:
 		goto notask;
 
 	set_current_state(TASK_INTERRUPTIBLE);
+        // XXX: Do we need this? Or is the tasklist_lock sufficient?
+        //rcu_read_lock();
 	read_lock(&tasklist_lock);
 	tsk = current;
+
+	if (wo->wo_type == PIDTYPE_PID) {
+		// Optimization for PIDTYPE_PID. No need to iterate through child and
+		// tracee lists to find the target task.
+
+                struct task_struct *real_parent = NULL;
+		struct task_struct *target = NULL;
+                bool do_regular_wait, do_ptrace_wait;
+
+            printk(KERN_INFO "Entering waitpid optimization");
+                target = pid_task(wo->wo_pid, PIDTYPE_PID);
+                if (!target) {
+                    //rcu_read_unlock();
+                    goto notask;
+                }
+		real_parent = !target->real_parent ? target->parent :
+						     target->real_parent;
+                if (!real_parent) {
+                    // XXX: Is it a kernel bug to get here? Or would this be
+                    // true of the init process?
+                    //rcu_read_unlock();
+                read_unlock(&tasklist_lock);
+                    goto notask;
+                }
+		do_regular_wait = tsk == real_parent ||
+				  (!(wo->wo_flags & __WNOTHREAD) &&
+				   same_thread_group(tsk, real_parent));
+		do_ptrace_wait = target->ptrace &&
+				 (tsk == target->parent ||
+				  (!(wo->wo_flags & __WNOTHREAD) &&
+				   same_thread_group(tsk, target->parent)));
+		//rcu_read_unlock();
+
+            printk(KERN_INFO "do_regular_wait:%d do_ptrace_wait:%d", do_regular_wait, do_ptrace_wait);
+		if (do_regular_wait) {
+			retval =
+				wait_consider_task(wo, /* ptrace= */ 0, target);
+            printk(KERN_INFO "regular wait returned:%d", retval);
+			if (retval) {
+				goto end;
+			}
+		}
+		if (do_ptrace_wait) {
+			retval =
+				wait_consider_task(wo, /* ptrace= */ 1, target);
+            printk(KERN_INFO "ptrace wait returned:%d", retval);
+			if (retval) {
+				goto end;
+			}
+		}
+                read_unlock(&tasklist_lock);
+		goto notask;
+	}
+
+            printk(KERN_INFO "entering do_wait slow path");
 	do {
 		retval = do_wait_thread(wo, tsk);
 		if (retval)
