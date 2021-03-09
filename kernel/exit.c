@@ -1439,6 +1439,39 @@ void __wake_up_parent(struct task_struct *p, struct task_struct *parent)
 			   TASK_INTERRUPTIBLE, p);
 }
 
+
+// Optimization for waiting on PIDTYPE_PID. No need to iterate through child
+// and tracee lists to find the target task.
+static int do_wait_pid(struct wait_opts *wo, struct task_struct *tsk)
+{
+	struct task_struct *real_parent = NULL;
+	struct task_struct *target = NULL;
+
+	target = pid_task(wo->wo_pid, PIDTYPE_PID);
+	if (!target) {
+		return 0;
+	}
+	real_parent =
+		!target->real_parent ? target->parent : target->real_parent;
+	BUG_ON(!real_parent);
+	if (tsk == real_parent || (!(wo->wo_flags & __WNOTHREAD) &&
+				   same_thread_group(tsk, real_parent))) {
+		retval = wait_consider_task(wo, /* ptrace= */ 0, target);
+		if (retval) {
+			return retval;
+		}
+	}
+	if (target->ptrace && (tsk == target->parent ||
+			       (!(wo->wo_flags & __WNOTHREAD) &&
+				same_thread_group(tsk, target->parent)))) {
+		retval = wait_consider_task(wo, /* ptrace= */ 1, target);
+		if (retval) {
+			return retval;
+		}
+	}
+	return 0;
+}
+
 static long do_wait(struct wait_opts *wo)
 {
 	struct task_struct *tsk;
@@ -1466,62 +1499,25 @@ repeat:
 	tsk = current;
 
 	if (wo->wo_type == PIDTYPE_PID) {
-		// Optimization for PIDTYPE_PID. No need to iterate through child and
-		// tracee lists to find the target task.
-
-		struct task_struct *real_parent = NULL;
-		struct task_struct *target = NULL;
-		bool do_regular_wait, do_ptrace_wait;
-
-		target = pid_task(wo->wo_pid, PIDTYPE_PID);
-		if (!target) {
-			goto notask;
-		}
-		real_parent = !target->real_parent ? target->parent :
-						     target->real_parent;
-		if (!real_parent) {
-			// XXX: Is it a kernel bug to get here? Or would this be
-			// true of the init process?
-			goto notask;
-		}
-		do_regular_wait = tsk == real_parent ||
-				  (!(wo->wo_flags & __WNOTHREAD) &&
-				   same_thread_group(tsk, real_parent));
-		do_ptrace_wait = target->ptrace &&
-				 (tsk == target->parent ||
-				  (!(wo->wo_flags & __WNOTHREAD) &&
-				   same_thread_group(tsk, target->parent)));
-
-		if (do_regular_wait) {
-			retval =
-				wait_consider_task(wo, /* ptrace= */ 0, target);
-			if (retval) {
+            retval = do_wait_pid(wo, tsk);
+            if (retval) {
+                goto end;
+            }
+	} else {
+		do {
+			retval = do_wait_thread(wo, tsk);
+			if (retval)
 				goto end;
-			}
-		}
-		if (do_ptrace_wait) {
-			retval =
-				wait_consider_task(wo, /* ptrace= */ 1, target);
-			if (retval) {
+
+			retval = ptrace_do_wait(wo, tsk);
+			if (retval)
 				goto end;
-			}
+
+			if (wo->wo_flags & __WNOTHREAD)
+				break;
 		}
-		read_unlock(&tasklist_lock);
-		goto notask;
+		while_each_thread(current, tsk);
 	}
-
-	do {
-		retval = do_wait_thread(wo, tsk);
-		if (retval)
-			goto end;
-
-		retval = ptrace_do_wait(wo, tsk);
-		if (retval)
-			goto end;
-
-		if (wo->wo_flags & __WNOTHREAD)
-			break;
-	} while_each_thread(current, tsk);
 	read_unlock(&tasklist_lock);
 
 notask:
