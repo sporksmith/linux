@@ -1491,9 +1491,8 @@ repeat:
 
 	if (wo->wo_type == PIDTYPE_PID) {
 		retval = do_wait_pid(wo);
-		if (retval) {
+		if (retval)
 			goto end;
-		}
 	} else {
 		struct task_struct *tsk = current;
 
