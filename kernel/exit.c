@@ -1444,24 +1444,23 @@ void __wake_up_parent(struct task_struct *p, struct task_struct *parent)
 static int do_wait_pid(struct wait_opts *wo, struct task_struct *tsk)
 {
 	struct task_struct *target = pid_task(wo->wo_pid, PIDTYPE_PID);
-	if (!target) {
+	int retval;
+
+	if (!target)
 		return 0;
-	}
 	if (tsk == target->real_parent ||
 	    (!(wo->wo_flags & __WNOTHREAD) &&
 	     same_thread_group(tsk, target->real_parent))) {
-		int retval = wait_consider_task(wo, /* ptrace= */ 0, target);
-		if (retval) {
+		retval = wait_consider_task(wo, /* ptrace= */ 0, target);
+		if (retval)
 			return retval;
-		}
 	}
 	if (target->ptrace && (tsk == target->parent ||
 			       (!(wo->wo_flags & __WNOTHREAD) &&
 				same_thread_group(tsk, target->parent)))) {
-		int retval = wait_consider_task(wo, /* ptrace= */ 1, target);
-		if (retval) {
+		retval = wait_consider_task(wo, /* ptrace= */ 1, target);
+		if (retval)
 			return retval;
-		}
 	}
 	return 0;
 }
@@ -1509,8 +1508,7 @@ repeat:
 
 			if (wo->wo_flags & __WNOTHREAD)
 				break;
-		}
-		while_each_thread(current, tsk);
+		} while_each_thread(current, tsk);
 	}
 	read_unlock(&tasklist_lock);
 
