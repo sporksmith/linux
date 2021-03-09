@@ -1439,7 +1439,6 @@ void __wake_up_parent(struct task_struct *p, struct task_struct *parent)
 			   TASK_INTERRUPTIBLE, p);
 }
 
-
 // Optimization for waiting on PIDTYPE_PID. No need to iterate through child
 // and tracee lists to find the target task.
 static int do_wait_pid(struct wait_opts *wo, struct task_struct *tsk)
@@ -1499,10 +1498,10 @@ repeat:
 	tsk = current;
 
 	if (wo->wo_type == PIDTYPE_PID) {
-            retval = do_wait_pid(wo, tsk);
-            if (retval) {
-                goto end;
-            }
+		retval = do_wait_pid(wo, tsk);
+		if (retval) {
+			goto end;
+		}
 	} else {
 		do {
 			retval = do_wait_thread(wo, tsk);
