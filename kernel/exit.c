@@ -1441,23 +1441,23 @@ void __wake_up_parent(struct task_struct *p, struct task_struct *parent)
 
 // Optimization for waiting on PIDTYPE_PID. No need to iterate through child
 // and tracee lists to find the target task.
-static int do_wait_pid(struct wait_opts *wo, struct task_struct *tsk)
+static int do_wait_pid(struct wait_opts *wo)
 {
 	struct task_struct *target = pid_task(wo->wo_pid, PIDTYPE_PID);
 	int retval;
 
 	if (!target)
 		return 0;
-	if (tsk == target->real_parent ||
+	if (current == target->real_parent ||
 	    (!(wo->wo_flags & __WNOTHREAD) &&
-	     same_thread_group(tsk, target->real_parent))) {
+	     same_thread_group(current, target->real_parent))) {
 		retval = wait_consider_task(wo, /* ptrace= */ 0, target);
 		if (retval)
 			return retval;
 	}
-	if (target->ptrace && (tsk == target->parent ||
+	if (target->ptrace && (current == target->parent ||
 			       (!(wo->wo_flags & __WNOTHREAD) &&
-				same_thread_group(tsk, target->parent)))) {
+				same_thread_group(current, target->parent)))) {
 		retval = wait_consider_task(wo, /* ptrace= */ 1, target);
 		if (retval)
 			return retval;
@@ -1467,7 +1467,6 @@ static int do_wait_pid(struct wait_opts *wo, struct task_struct *tsk)
 
 static long do_wait(struct wait_opts *wo)
 {
-	struct task_struct *tsk;
 	int retval;
 
 	trace_sched_process_wait(wo->wo_pid);
@@ -1489,14 +1488,15 @@ repeat:
 
 	set_current_state(TASK_INTERRUPTIBLE);
 	read_lock(&tasklist_lock);
-	tsk = current;
 
 	if (wo->wo_type == PIDTYPE_PID) {
-		retval = do_wait_pid(wo, tsk);
+		retval = do_wait_pid(wo);
 		if (retval) {
 			goto end;
 		}
 	} else {
+		struct task_struct *tsk = current;
+
 		do {
 			retval = do_wait_thread(wo, tsk);
 			if (retval)
