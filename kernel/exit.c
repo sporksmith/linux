@@ -1443,19 +1443,14 @@ void __wake_up_parent(struct task_struct *p, struct task_struct *parent)
 // and tracee lists to find the target task.
 static int do_wait_pid(struct wait_opts *wo, struct task_struct *tsk)
 {
-	struct task_struct *real_parent = NULL;
-	struct task_struct *target = NULL;
-
-	target = pid_task(wo->wo_pid, PIDTYPE_PID);
+	struct task_struct *target = pid_task(wo->wo_pid, PIDTYPE_PID);
 	if (!target) {
 		return 0;
 	}
-	real_parent =
-		!target->real_parent ? target->parent : target->real_parent;
-	BUG_ON(!real_parent);
-	if (tsk == real_parent || (!(wo->wo_flags & __WNOTHREAD) &&
-				   same_thread_group(tsk, real_parent))) {
-		retval = wait_consider_task(wo, /* ptrace= */ 0, target);
+	if (tsk == target->real_parent ||
+	    (!(wo->wo_flags & __WNOTHREAD) &&
+	     same_thread_group(tsk, target->real_parent))) {
+		int retval = wait_consider_task(wo, /* ptrace= */ 0, target);
 		if (retval) {
 			return retval;
 		}
@@ -1463,7 +1458,7 @@ static int do_wait_pid(struct wait_opts *wo, struct task_struct *tsk)
 	if (target->ptrace && (tsk == target->parent ||
 			       (!(wo->wo_flags & __WNOTHREAD) &&
 				same_thread_group(tsk, target->parent)))) {
-		retval = wait_consider_task(wo, /* ptrace= */ 1, target);
+		int retval = wait_consider_task(wo, /* ptrace= */ 1, target);
 		if (retval) {
 			return retval;
 		}
