@@ -1473,15 +1473,13 @@ static int do_wait_pid(struct wait_opts *wo)
 	ptrace = true;
 
 	/* A ptrace wait can be done on non-thread-group-leaders. */
-	if (!target) {
+	if (!target)
 		target = pid_task(wo->wo_pid, PIDTYPE_PID);
-	}
 
 	if (target && is_effectively_child(wo, ptrace, target)) {
 		retval = wait_consider_task(wo, ptrace, target);
-		if (retval) {
+		if (retval)
 			return retval;
-		}
 	}
 
 	return 0;
