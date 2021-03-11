@@ -1439,29 +1439,51 @@ void __wake_up_parent(struct task_struct *p, struct task_struct *parent)
 			   TASK_INTERRUPTIBLE, p);
 }
 
-// Optimization for waiting on PIDTYPE_PID. No need to iterate through child
-// and tracee lists to find the target task.
+static bool is_effectively_child(struct wait_opts *wo, bool ptrace,
+				 struct task_struct *target)
+{
+	struct task_struct *parent =
+		!ptrace ? target->real_parent : target->parent;
+
+	return current == parent || (!(wo->wo_flags & __WNOTHREAD) &&
+				     same_thread_group(current, parent));
+}
+
+/*
+ * Optimization for waiting on PIDTYPE_PID. No need to iterate through child
+ * and tracee lists to find the target task.
+ */
 static int do_wait_pid(struct wait_opts *wo)
 {
-	struct task_struct *target = pid_task(wo->wo_pid, PIDTYPE_PID);
+        bool ptrace;
+	struct task_struct *target;
 	int retval;
 
-	if (!target)
-		return 0;
-	if (current == target->real_parent ||
-	    (!(wo->wo_flags & __WNOTHREAD) &&
-	     same_thread_group(current, target->real_parent))) {
-		retval = wait_consider_task(wo, /* ptrace= */ 0, target);
+        ptrace = false;
+
+	/* A non-ptrace wait can only be performed on a thread group leader. */
+	target = pid_task(wo->wo_pid, PIDTYPE_TGID);
+
+	if (target && is_effectively_child(wo, ptrace, target)) {
+		retval = wait_consider_task(wo, ptrace, target);
 		if (retval)
 			return retval;
 	}
-	if (target->ptrace && (current == target->parent ||
-			       (!(wo->wo_flags & __WNOTHREAD) &&
-				same_thread_group(current, target->parent)))) {
-		retval = wait_consider_task(wo, /* ptrace= */ 1, target);
-		if (retval)
+
+	ptrace = true;
+
+	/* A ptrace wait can be done on non-thread-group-leaders. */
+	if (!target) {
+            target = pid_task(wo->wo_pid, PIDTYPE_PID);
+        }
+
+	if (target && is_effectively_child(wo, ptrace, target)) {
+		retval = wait_consider_task(wo, ptrace, target);
+		if (retval) {
 			return retval;
+		}
 	}
+
 	return 0;
 }
 
