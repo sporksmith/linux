@@ -1455,11 +1455,11 @@ static bool is_effectively_child(struct wait_opts *wo, bool ptrace,
  */
 static int do_wait_pid(struct wait_opts *wo)
 {
-        bool ptrace;
+	bool ptrace;
 	struct task_struct *target;
 	int retval;
 
-        ptrace = false;
+	ptrace = false;
 
 	/* A non-ptrace wait can only be performed on a thread group leader. */
 	target = pid_task(wo->wo_pid, PIDTYPE_TGID);
@@ -1474,8 +1474,8 @@ static int do_wait_pid(struct wait_opts *wo)
 
 	/* A ptrace wait can be done on non-thread-group-leaders. */
 	if (!target) {
-            target = pid_task(wo->wo_pid, PIDTYPE_PID);
-        }
+		target = pid_task(wo->wo_pid, PIDTYPE_PID);
+	}
 
 	if (target && is_effectively_child(wo, ptrace, target)) {
 		retval = wait_consider_task(wo, ptrace, target);
