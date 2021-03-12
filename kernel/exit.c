@@ -1459,24 +1459,21 @@ static int do_wait_pid(struct wait_opts *wo)
 	struct task_struct *target;
 	int retval;
 
+	target = pid_task(wo->wo_pid, PIDTYPE_PID);
+	if (!target) {
+		return 0;
+	}
+
 	ptrace = false;
-
-	/* A non-ptrace wait can only be performed on a thread group leader. */
-	target = pid_task(wo->wo_pid, PIDTYPE_TGID);
-
-	if (target && is_effectively_child(wo, ptrace, target)) {
+	if (thread_group_leader(target) &&
+	    is_effectively_child(wo, ptrace, target)) {
 		retval = wait_consider_task(wo, ptrace, target);
 		if (retval)
 			return retval;
 	}
 
 	ptrace = true;
-
-	/* A ptrace wait can be done on non-thread-group-leaders. */
-	if (!target)
-		target = pid_task(wo->wo_pid, PIDTYPE_PID);
-
-	if (target && is_effectively_child(wo, ptrace, target)) {
+	if (target->ptrace && is_effectively_child(wo, ptrace, target)) {
 		retval = wait_consider_task(wo, ptrace, target);
 		if (retval)
 			return retval;
