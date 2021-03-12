@@ -1460,9 +1460,8 @@ static int do_wait_pid(struct wait_opts *wo)
 	int retval;
 
 	target = pid_task(wo->wo_pid, PIDTYPE_PID);
-	if (!target) {
+	if (!target)
 		return 0;
-	}
 
 	ptrace = false;
 	if (thread_group_leader(target) &&
